@@ -338,7 +338,8 @@ boundaryPoints.forEach(pt => {
   const code = beidou.encode(pt.lon, pt.lat, 6);
   const decoded = beidou.decode(code);
   const center = beidou.rangesToCenter(decoded);
-  const lonErr = Math.abs(center.longitude - pt.lon);
+  const rawLonErr = Math.abs(center.longitude - pt.lon);
+  const lonErr = Math.min(rawLonErr, 360 - rawLonErr); // 处理 -180/180 环绕
   const latErr = Math.abs(center.latitude - pt.lat);
   assert(lonErr < 1 && latErr < 1, `TC-403 ${pt.name}: 偏差(lon=${lonErr.toFixed(6)}°, lat=${latErr.toFixed(6)}°)`);
   console.log(`  ${pt.name}: code=${code}, center=(${center.longitude.toFixed(6)}, ${center.latitude.toFixed(6)})`);

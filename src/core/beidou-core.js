@@ -40,6 +40,24 @@ function encode(longitude, latitude, precision) {
     throw new Error('Precision must be positive');
   }
 
+  // BUG-003: 类型校验 — 经度和纬度必须为 number
+  if (typeof longitude !== 'number' || typeof latitude !== 'number') {
+    throw new TypeError('Longitude and latitude must be numbers');
+  }
+
+  // BUG-001: 经纬度范围校验
+  if (longitude < LON_RANGE[0] || longitude > LON_RANGE[1]) {
+    throw new RangeError(`Longitude ${longitude} out of range [-180, 180]`);
+  }
+  if (latitude < LAT_RANGE[0] || latitude > LAT_RANGE[1]) {
+    throw new RangeError(`Latitude ${latitude} out of range [-90, 90]`);
+  }
+
+  // BUG-004: 统一 -180 与 180 编码 — 将 -180 规范化为 180
+  if (longitude === -180) {
+    longitude = 180;
+  }
+
   let lonRange = [...LON_RANGE];
   let latRange = [...LAT_RANGE];
   let result = '';
@@ -87,6 +105,11 @@ function encode(longitude, latitude, precision) {
  * @returns {object} { longitude: [min, max], latitude: [min, max] }
  */
 function decode(code) {
+  // BUG-002: 空值校验
+  if (!code || typeof code !== 'string' || code.length === 0) {
+    throw new Error('无效的北斗网格码');
+  }
+
   let lonRange = [...LON_RANGE];
   let latRange = [...LAT_RANGE];
   let isLon = true;
