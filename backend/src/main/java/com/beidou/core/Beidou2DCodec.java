@@ -241,4 +241,123 @@ public class Beidou2DCodec {
         public double getWidth() { return width; }
         public double getHeight() { return height; }
     }
+
+    // ==================== 网格边界可视化方法 ====================
+
+    /**
+     * 根据坐标范围生成网格边界多边形顶点（闭合环）
+     * 返回 5 个点（首尾闭合），顺序为：左下→右下→右上→左上→左下
+     * 可直接用于 GeoJSON Polygon 或地图绘制
+     *
+     * @param range 坐标范围对象
+     * @return 多边形顶点数组，每个元素为 [longitude, latitude]
+     */
+    public static double[][] getPolygon(CoordinateRange range) {
+        double lonMin = range.getLonMin();
+        double lonMax = range.getLonMax();
+        double latMin = range.getLatMin();
+        double latMax = range.getLatMax();
+
+        return new double[][] {
+            { lonMin, latMin },  // 左下 (Southwest)
+            { lonMax, latMin },  // 右下 (Southeast)
+            { lonMax, latMax },  // 右上 (Northeast)
+            { lonMin, latMax },  // 左上 (Northwest)
+            { lonMin, latMin }   // 闭合 (Close ring)
+        };
+    }
+
+    /**
+     * 计算网格面积（平方米）
+     * 使用梯形近似：考虑经度方向随纬度变化的实际距离
+     *
+     * @param range 坐标范围对象
+     * @return 面积（平方米）
+     */
+    public static double getArea(CoordinateRange range) {
+        double latCenter = (range.getLatMin() + range.getLatMax()) / 2;
+        double lonWidth = range.getLonMax() - range.getLonMin();
+        double latHeight = range.getLatMax() - range.getLatMin();
+
+        // 纬度方向：1度 ≈ 111000米
+        double heightMeters = latHeight * 111000;
+
+        // 经度方向：1度 ≈ 111000米 * cos(中心纬度)
+        double widthMeters = lonWidth * 111000 * Math.cos(Math.toRadians(latCenter));
+
+        return widthMeters * heightMeters;
+    }
+
+    /**
+     * 解码网格码并返回完整的边界信息（用于可视化）
+     * 包含：网格码、中心点、坐标范围、多边形顶点、面积
+     *
+     * @param code 网格编码字符串
+     * @return 完整边界信息对象
+     */
+    public static BoundaryResult decodeWithBoundary(String code) {
+        CoordinateRange range = decode(code);
+        Coordinate center = rangesToCenter(range);
+        double[][] polygon = getPolygon(range);
+        double area = getArea(range);
+
+        return new BoundaryResult(code, center, range, polygon, area);
+    }
+
+    /**
+     * 编码并返回完整的边界信息（用于可视化）
+     *
+     * @param longitude 经度
+     * @param latitude 纬度
+     * @param precision 编码精度
+     * @return 完整边界信息对象
+     */
+    public static BoundaryResult encodeWithBoundary(double longitude, double latitude, int precision) {
+        String code = encode(longitude, latitude, precision);
+        return decodeWithBoundary(code);
+    }
+
+    /**
+     * 网格边界完整信息类（用于可视化）
+     * 包含网格码、中心点、坐标范围、多边形顶点和面积
+     */
+    public static class BoundaryResult {
+        private final String code;
+        private final Coordinate center;
+        private final CoordinateRange range;
+        private final double[][] polygon;
+        private final double area;
+
+        public BoundaryResult(String code, Coordinate center, CoordinateRange range,
+                              double[][] polygon, double area) {
+            this.code = code;
+            this.center = center;
+            this.range = range;
+            this.polygon = polygon;
+            this.area = area;
+        }
+
+        public String getCode() { return code; }
+        public Coordinate getCenter() { return center; }
+        public CoordinateRange getRange() { return range; }
+        public double[][] getPolygon() { return polygon; }
+        public double getArea() { return area; }
+
+        /**
+         * 获取层级（编码长度）
+         */
+        public int getLevel() { return code.length(); }
+
+        /**
+         * 转为可读字符串
+         */
+        @Override
+        public String toString() {
+            return String.format("BoundaryResult{code=%s, level=L%d, center=[%.6f, %.6f], " +
+                    "range=[lon:%.6f~%.6f, lat:%.6f~%.6f], area=%.2f m², polygon=%d points}",
+                    code, getLevel(), center.getLongitude(), center.getLatitude(),
+                    range.getLonMin(), range.getLonMax(), range.getLatMin(), range.getLatMax(),
+                    area, polygon.length);
+        }
+    }
 }

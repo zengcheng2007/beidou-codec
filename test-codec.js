@@ -85,6 +85,92 @@ TEST_CASES.forEach(testCase => {
   console.log(`  误差在网格精度内: ${withinPrecision ? '✓ 通过' : '✗ 失败'}\n`);
 });
 
+// ==================== 可视化功能测试 ====================
+
+console.log('=== 网格边界可视化测试 ===\n');
+
+// 测试 1: getPolygon - 多边形顶点生成
+console.log('测试 1: getPolygon 多边形生成');
+const testCode = 'wx4g0b';
+const decoded1 = beidou.decode(testCode);
+const polygon1 = beidou.getPolygon(decoded1);
+
+console.log(`网格码: ${testCode}`);
+console.log(`多边形顶点数: ${polygon1.length}`);
+console.log(`首尾闭合: ${polygon1[0][0] === polygon1[4][0] && polygon1[0][1] === polygon1[4][1] ? '✓' : '✗'}`);
+console.log('顶点坐标:');
+polygon1.forEach((point, idx) => {
+  const labels = ['左下(SW)', '右下(SE)', '右上(NE)', '左上(NW)', '闭合'];
+  console.log(`  ${labels[idx]}: [${point[0].toFixed(6)}, ${point[1].toFixed(6)}]`);
+});
+console.log();
+
+// 测试 2: getArea - 面积计算
+console.log('测试 2: getArea 面积计算');
+const levels = [
+  { code: 'wx', label: 'L2' },
+  { code: 'wx4g', label: 'L4' },
+  { code: 'wx4g0b', label: 'L6' },
+  { code: 'wx4g0bm6', label: 'L8' },
+  { code: 'wx4g0bm6c4', label: 'L10' }
+];
+
+levels.forEach(({ code, label }) => {
+  const ranges = beidou.decode(code);
+  const area = beidou.getArea(ranges);
+  const gridSize = beidou.getGridSizeInMeters(code.length, 39.9042);
+  console.log(`${label} (${code}): 面积=${area.toFixed(2)} m², 网格尺寸=${gridSize.width.toFixed(2)}m × ${gridSize.height.toFixed(2)}m`);
+});
+console.log();
+
+// 测试 3: decodeWithBoundary - 完整边界信息
+console.log('测试 3: decodeWithBoundary 完整边界信息');
+const boundary1 = beidou.decodeWithBoundary('wx4g0b');
+console.log(`网格码: ${boundary1.code}`);
+console.log(`层级: L${boundary1.level}`);
+console.log(`中心点: [${boundary1.center.longitude.toFixed(6)}, ${boundary1.center.latitude.toFixed(6)}]`);
+console.log(`面积: ${boundary1.area.toFixed(2)} m²`);
+console.log(`多边形顶点数: ${boundary1.polygon.length}`);
+console.log(`坐标范围: lon=[${boundary1.ranges.longitude[0].toFixed(6)}, ${boundary1.ranges.longitude[1].toFixed(6)}], lat=[${boundary1.ranges.latitude[0].toFixed(6)}, ${boundary1.ranges.latitude[1].toFixed(6)}]`);
+console.log();
+
+// 测试 4: encodeWithBoundary - 编码并返回完整边界
+console.log('测试 4: encodeWithBoundary 编码+边界');
+const boundary2 = beidou.encodeWithBoundary(116.4074, 39.9042, 6);
+console.log(`输入坐标: (116.4074, 39.9042)`);
+console.log(`网格码: ${boundary2.code}`);
+console.log(`层级: L${boundary2.level}`);
+console.log(`中心点: [${boundary2.center.longitude.toFixed(6)}, ${boundary2.center.latitude.toFixed(6)}]`);
+console.log(`面积: ${boundary2.area.toFixed(2)} m²`);
+console.log();
+
+// 测试 5: 验证多边形闭合和 GeoJSON 兼容
+console.log('测试 5: GeoJSON Polygon 兼容性验证');
+const geojsonPolygon = beidou.getPolygon(beidou.decode('wx4g0bm6c4'));
+const isClosed = geojsonPolygon[0][0] === geojsonPolygon[geojsonPolygon.length - 1][0] &&
+                  geojsonPolygon[0][1] === geojsonPolygon[geojsonPolygon.length - 1][1];
+console.log(`多边形闭合: ${isClosed ? '✓' : '✗'}`);
+console.log(`顶点数: ${geojsonPolygon.length} (GeoJSON 要求 >= 5)`);
+console.log(`可直接用于 GeoJSON: ${isClosed && geojsonPolygon.length >= 5 ? '✓' : '✗'}`);
+
+// 输出 GeoJSON 格式示例
+const geojsonExample = {
+  type: 'Feature',
+  geometry: {
+    type: 'Polygon',
+    coordinates: [geojsonPolygon]
+  },
+  properties: {
+    code: 'wx4g0bm6c4',
+    level: 10,
+    area: beidou.getArea(beidou.decode('wx4g0bm6c4'))
+  }
+};
+console.log('\nGeoJSON Feature 示例:');
+console.log(JSON.stringify(geojsonExample, null, 2));
+
+console.log('\n=== 可视化测试完成 ===');
+
 // 导出测试函数供其他模块使用
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { TEST_CASES };

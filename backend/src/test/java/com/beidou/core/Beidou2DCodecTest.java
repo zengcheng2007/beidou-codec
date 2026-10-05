@@ -201,6 +201,143 @@ public class Beidou2DCodecTest {
     }
 
     /**
+     * 测试网格边界多边形生成
+     */
+    @Test
+    public void testGetPolygon() {
+        String code = "wx4g0b"; // 北京 L6
+        Beidou2DCodec.CoordinateRange range = Beidou2DCodec.decode(code);
+        double[][] polygon = Beidou2DCodec.getPolygon(range);
+
+        assertNotNull(polygon);
+        assertEquals("Polygon should have 5 points (closed ring)", 5, polygon.length);
+
+        // 验证首尾闭合
+        assertEquals("First point lon should equal last point lon",
+                     polygon[0][0], polygon[4][0], DELTA);
+        assertEquals("First point lat should equal last point lat",
+                     polygon[0][1], polygon[4][1], DELTA);
+
+        // 验证顶点顺序：左下→右下→右上→左上
+        // 左下：lonMin, latMin
+        assertEquals(polygon[0][0], range.getLonMin(), DELTA);
+        assertEquals(polygon[0][1], range.getLatMin(), DELTA);
+        // 右下：lonMax, latMin
+        assertEquals(polygon[1][0], range.getLonMax(), DELTA);
+        assertEquals(polygon[1][1], range.getLatMin(), DELTA);
+        // 右上：lonMax, latMax
+        assertEquals(polygon[2][0], range.getLonMax(), DELTA);
+        assertEquals(polygon[2][1], range.getLatMax(), DELTA);
+        // 左上：lonMin, latMax
+        assertEquals(polygon[3][0], range.getLonMin(), DELTA);
+        assertEquals(polygon[3][1], range.getLatMax(), DELTA);
+    }
+
+    /**
+     * 测试网格面积计算
+     */
+    @Test
+    public void testGetArea() {
+        // L6 精度在北京纬度约 1km × 1km
+        String code = "wx4g0b";
+        Beidou2DCodec.CoordinateRange range = Beidou2DCodec.decode(code);
+        double area = Beidou2DCodec.getArea(range);
+
+        assertTrue("Area should be positive", area > 0);
+        // L6 约 ~1km × ~1km = ~1 km² = ~1,000,000 m²
+        // 但实际网格可能更小，只验证数量级合理
+        assertTrue("L6 area should be > 100,000 m²", area > 100000);
+        assertTrue("L6 area should be < 10,000,000 m²", area < 10000000);
+
+        // L10 精度面积约 ~1 m²
+        String codeL10 = "wx4g0bm6c4";
+        Beidou2DCodec.CoordinateRange rangeL10 = Beidou2DCodec.decode(codeL10);
+        double areaL10 = Beidou2DCodec.getArea(rangeL10);
+        assertTrue("L10 area should be < 10 m²", areaL10 < 10);
+        assertTrue("L10 area should be > 0.01 m²", areaL10 > 0.01);
+    }
+
+    /**
+     * 测试 decodeWithBoundary 方法
+     */
+    @Test
+    public void testDecodeWithBoundary() {
+        String code = "wx4g0b";
+        Beidou2DCodec.BoundaryResult result = Beidou2DCodec.decodeWithBoundary(code);
+
+        assertNotNull(result);
+        assertEquals(code, result.getCode());
+        assertEquals(6, result.getLevel());
+        assertNotNull(result.getCenter());
+        assertNotNull(result.getRange());
+        assertNotNull(result.getPolygon());
+        assertTrue(result.getArea() > 0);
+
+        // 验证中心点在范围内
+        double centerLon = result.getCenter().getLongitude();
+        double centerLat = result.getCenter().getLatitude();
+        assertTrue(centerLon >= result.getRange().getLonMin());
+        assertTrue(centerLon <= result.getRange().getLonMax());
+        assertTrue(centerLat >= result.getRange().getLatMin());
+        assertTrue(centerLat <= result.getRange().getLatMax());
+    }
+
+    /**
+     * 测试 encodeWithBoundary 方法
+     */
+    @Test
+    public void testEncodeWithBoundary() {
+        double lon = 116.4074;
+        double lat = 39.9042;
+        int precision = 6;
+
+        Beidou2DCodec.BoundaryResult result = Beidou2DCodec.encodeWithBoundary(lon, lat, precision);
+
+        assertNotNull(result);
+        assertEquals("wx4g0b", result.getCode());
+        assertEquals(6, result.getLevel());
+
+        // 验证面积和中心点合理性
+        assertTrue(result.getArea() > 0);
+        assertTrue(Math.abs(result.getCenter().getLongitude() - lon) < 0.1);
+        assertTrue(Math.abs(result.getCenter().getLatitude() - lat) < 0.1);
+    }
+
+    /**
+     * 测试不同层级的面积递减
+     */
+    @Test
+    public void testAreaDecreasesWithLevel() {
+        double lon = 116.4074;
+        double lat = 39.9042;
+
+        double prevArea = Double.MAX_VALUE;
+        for (int precision = 2; precision <= 10; precision += 2) {
+            Beidou2DCodec.BoundaryResult result =
+                Beidou2DCodec.encodeWithBoundary(lon, lat, precision);
+            assertTrue("Area should decrease with precision level",
+                       result.getArea() < prevArea);
+            prevArea = result.getArea();
+        }
+    }
+
+    /**
+     * 测试 BoundaryResult 的 toString
+     */
+    @Test
+    public void testBoundaryResultToString() {
+        Beidou2DCodec.BoundaryResult result =
+            Beidou2DCodec.decodeWithBoundary("wx4g0b");
+        String str = result.toString();
+
+        assertNotNull(str);
+        assertTrue(str.contains("wx4g0b"));
+        assertTrue(str.contains("L6"));
+        assertTrue(str.contains("area="));
+        assertTrue(str.contains("polygon=5 points"));
+    }
+
+    /**
      * 测试与 JS 版本的兼容性
      * 这个测试确保 Java 和 JS 实现产生完全相同的输出
      */

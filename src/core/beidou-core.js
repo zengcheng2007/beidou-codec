@@ -175,6 +175,86 @@ function getGridSizeInMeters(precision, latitude = 0) {
   };
 }
 
+/**
+ * 计算网格面积（平方米）
+ * 使用梯形近似：考虑经度方向随纬度变化的实际距离
+ *
+ * @param {object} ranges - decode() 返回的范围对象
+ * @returns {number} 面积（平方米）
+ */
+function getArea(ranges) {
+  const latCenter = (ranges.latitude[0] + ranges.latitude[1]) / 2;
+  const lonWidth = ranges.longitude[1] - ranges.longitude[0];
+  const latHeight = ranges.latitude[1] - ranges.latitude[0];
+
+  // 纬度方向：1度 ≈ 111000米
+  const heightMeters = latHeight * 111000;
+
+  // 经度方向：1度 ≈ 111000米 * cos(中心纬度)
+  const widthMeters = lonWidth * 111000 * Math.cos(latCenter * Math.PI / 180);
+
+  return widthMeters * heightMeters;
+}
+
+/**
+ * 根据坐标范围生成网格边界多边形顶点（闭合环）
+ * 返回 5 个点（首尾闭合），顺序为：左下→右下→右上→左上→左下
+ * 可直接用于 GeoJSON Polygon 或地图绘制
+ *
+ * @param {object} ranges - decode() 返回的范围对象
+ * @returns {Array} 多边形顶点数组，每个元素为 [longitude, latitude]
+ */
+function getPolygon(ranges) {
+  const lonMin = ranges.longitude[0];
+  const lonMax = ranges.longitude[1];
+  const latMin = ranges.latitude[0];
+  const latMax = ranges.latitude[1];
+
+  return [
+    [lonMin, latMin],  // 左下 (Southwest)
+    [lonMax, latMin],  // 右下 (Southeast)
+    [lonMax, latMax],  // 右上 (Northeast)
+    [lonMin, latMax],  // 左上 (Northwest)
+    [lonMin, latMin]   // 闭合 (Close ring)
+  ];
+}
+
+/**
+ * 解码网格码并返回完整的边界信息（用于可视化）
+ * 包含：网格码、中心点、坐标范围、多边形顶点、面积
+ *
+ * @param {string} code - 网格编码字符串
+ * @returns {object} 完整边界信息对象
+ */
+function decodeWithBoundary(code) {
+  const ranges = decode(code);
+  const center = rangesToCenter(ranges);
+  const polygon = getPolygon(ranges);
+  const area = getArea(ranges);
+
+  return {
+    code,
+    center,
+    ranges,
+    polygon,
+    area,
+    level: code.length
+  };
+}
+
+/**
+ * 编码并返回完整的边界信息（用于可视化）
+ *
+ * @param {number} longitude - 经度
+ * @param {number} latitude - 纬度
+ * @param {number} precision - 编码精度
+ * @returns {object} 完整边界信息对象
+ */
+function encodeWithBoundary(longitude, latitude, precision) {
+  const code = encode(longitude, latitude, precision);
+  return decodeWithBoundary(code);
+}
+
 // 导出模块
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -184,6 +264,10 @@ if (typeof module !== 'undefined' && module.exports) {
     encodeToCenter,
     calculateGridSize,
     getGridSizeInMeters,
+    getArea,
+    getPolygon,
+    decodeWithBoundary,
+    encodeWithBoundary,
     BASE32_CHARS
   };
 }
